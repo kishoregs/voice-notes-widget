@@ -81,15 +81,15 @@ export const useNotes = () => {
         };
         
         // Update current note if it's the one being updated
-        if (currentNote && currentNote.id === noteId) {
-          setCurrentNote(updatedNote);
-        }
+        setCurrentNote(prevCurrentNote => 
+          prevCurrentNote && prevCurrentNote.id === noteId ? updatedNote : prevCurrentNote
+        );
         
         return updatedNote;
       }
       return note;
     }));
-  }, [currentNote]);
+  }, []);
 
   // Delete a note
   const deleteNote = useCallback((noteId) => {
@@ -165,12 +165,27 @@ export const useNotes = () => {
 
   // Append text to a note's content
   const appendToNote = useCallback((noteId, text) => {
-    const note = notes.find(n => n.id === noteId);
-    if (note) {
-      const newContent = note.content + text;
-      updateNote(noteId, { content: newContent });
-    }
-  }, [notes, updateNote]);
+    if (!text) return;
+    
+    setNotes(prev => prev.map(note => {
+      if (note.id === noteId) {
+        const newContent = (note.content ? note.content + ' ' : '') + text;
+        const updatedNote = {
+          ...note,
+          content: newContent,
+          updatedAt: new Date().toISOString(),
+          wordCount: newContent.split(/\s+/).filter(Boolean).length
+        };
+
+        setCurrentNote(prevCurrentNote => 
+          prevCurrentNote && prevCurrentNote.id === noteId ? updatedNote : prevCurrentNote
+        );
+        
+        return updatedNote;
+      }
+      return note;
+    }));
+  }, []);
 
   // Get all unique categories
   const getCategories = useCallback(() => {

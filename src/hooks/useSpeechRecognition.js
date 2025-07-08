@@ -8,6 +8,7 @@ export const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
+  const [latestFinalSegment, setLatestFinalSegment] = useState('');
   const [error, setError] = useState(null);
   const [isSupported, setIsSupported] = useState(false);
   const [confidence, setConfidence] = useState(0);
@@ -29,24 +30,29 @@ export const useSpeechRecognition = () => {
       
       // Handle results
       recognition.onresult = (event) => {
-        let newInterimTranscript = "";
-        let newFinalTranscript = finalTranscriptRef.current;
+        let newInterimTranscript = '';
+        let finalSegment = '';
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
           const transcriptPart = result[0].transcript;
 
           if (result.isFinal) {
-            newFinalTranscript += transcriptPart + " ";
+            finalSegment += transcriptPart + ' ';
             setConfidence(result[0].confidence);
           } else {
             newInterimTranscript += transcriptPart;
           }
         }
 
-        finalTranscriptRef.current = newFinalTranscript;
-        setTranscript(newFinalTranscript.trim()); // Update final transcript
-        setInterimTranscript(newInterimTranscript); // Update interim transcript
+        if (finalSegment) {
+          setLatestFinalSegment(finalSegment.trim());
+          // Update the full transcript by appending the new final segment
+          finalTranscriptRef.current += finalSegment;
+          setTranscript(finalTranscriptRef.current.trim());
+        }
+        
+        setInterimTranscript(newInterimTranscript);
       };
 
       // Handle errors
@@ -93,7 +99,7 @@ export const useSpeechRecognition = () => {
         recognitionRef.current.abort();
       }
     };
-  }, [language, isListening]);
+  }, [language]);
 
   const startListening = useCallback(() => {
     if (!isSupported) {
@@ -124,6 +130,7 @@ export const useSpeechRecognition = () => {
   const resetTranscript = useCallback(() => {
     setTranscript('');
     setInterimTranscript('');
+    setLatestFinalSegment('');
     finalTranscriptRef.current = '';
     setConfidence(0);
   }, []);
@@ -148,6 +155,7 @@ export const useSpeechRecognition = () => {
     isListening,
     transcript,
     interimTranscript,
+    latestFinalSegment,
     error,
     isSupported,
     confidence,

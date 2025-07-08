@@ -22,8 +22,8 @@ import './App.css';
 function App() {
   const {
     isListening,
-    transcript,
     interimTranscript,
+    latestFinalSegment,
     error,
     isSupported,
     confidence,
@@ -32,7 +32,6 @@ function App() {
     stopListening,
     resetTranscript,
     changeLanguage,
-    fullTranscript
   } = useSpeechRecognition();
 
   const {
@@ -60,7 +59,15 @@ function App() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showSidebar, setShowSidebar] = useState(true);
   const [audioEnabled, setAudioEnabled] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    const storedTheme = localStorage.getItem('theme');
+    if (storedTheme) {
+      return storedTheme === 'dark';
+    }
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  const [lastProcessedSegment, setLastProcessedSegment] = useState('');
 
   // Update elapsed time during recording
   useEffect(() => {
@@ -73,20 +80,31 @@ function App() {
     return () => clearInterval(interval);
   }, [isRecording, recordingStartTime]);
 
-  // Auto-save transcript to current note
+  // Append the latest final transcript segment to the current note
   useEffect(() => {
-    if (currentNote && transcript && isRecording) {
-      updateNote(currentNote.id, { content: transcript });
+    if (latestFinalSegment && latestFinalSegment !== lastProcessedSegment && currentNote) {
+      appendToNote(currentNote.id, latestFinalSegment);
+      setLastProcessedSegment(latestFinalSegment);
     }
-  }, [transcript, currentNote, isRecording, updateNote]);
+  }, [latestFinalSegment, currentNote, appendToNote, lastProcessedSegment]);
 
-  // Apply dark mode
+  // Apply dark mode and store preference
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
     }
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => {
+      setDarkMode(e.matches);
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
   }, [darkMode]);
 
   const handleStartRecording = () => {
@@ -315,10 +333,10 @@ function App() {
                       
                       {interimTranscript && (
                         <div className="p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg border-l-4 border-primary">
-                          <p className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                          <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
                             <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                             Live transcription:
-                          </p>
+                          </div>
                           <p className="text-sm italic text-primary">{interimTranscript}</p>
                         </div>
                       )}
