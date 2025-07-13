@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
-import { Textarea } from '@/components/ui/textarea.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { 
   Mic, 
@@ -17,6 +16,8 @@ import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 import { useNotes } from './hooks/useNotes';
 import { RecordingControls } from './components/RecordingControls';
 import { NotesList } from './components/NotesList';
+import RichTextEditor from './components/RichTextEditor';
+import CommandPalette from './components/CommandPalette';
 import './App.css';
 
 function App() {
@@ -51,7 +52,9 @@ function App() {
     setSortBy,
     setSortOrder,
     exportNotes,
-    getStats
+    getStats,
+    toggleArchiveNote,
+    toggleStarNote
   } = useNotes();
 
   const [isRecording, setIsRecording] = useState(false);
@@ -59,6 +62,7 @@ function App() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showSidebar, setShowSidebar] = useState(true);
   const [audioEnabled, setAudioEnabled] = useState(true);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     const storedTheme = localStorage.getItem('theme');
     if (storedTheme) {
@@ -106,6 +110,34 @@ function App() {
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [darkMode]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Command palette shortcut (Ctrl/Cmd + K)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(true);
+      }
+      
+      // Quick new note (Ctrl/Cmd + N)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        handleNewNote();
+      }
+      
+      // Quick start recording (Ctrl/Cmd + R)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        if (!isRecording) {
+          handleStartRecording();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isRecording]);
 
   const handleStartRecording = () => {
     if (!currentNote) {
@@ -324,11 +356,11 @@ function App() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      <Textarea
-                        value={currentNote.content}
-                        onChange={(e) => updateNote(currentNote.id, { content: e.target.value })}
+                      <RichTextEditor
+                        content={currentNote.content}
+                        onChange={(content) => updateNote(currentNote.id, { content })}
                         placeholder="Your transcription will appear here as you speak..."
-                        className="min-h-[300px] resize-none text-base leading-relaxed"
+                        className="min-h-[300px]"
                       />
                       
                       {interimTranscript && (
@@ -406,6 +438,21 @@ function App() {
           </div>
         </div>
       </div>
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onCreateNote={handleNewNote}
+        onStartRecording={handleStartRecording}
+        onToggleDarkMode={() => setDarkMode(!darkMode)}
+        onExportNotes={exportNotes}
+        onToggleArchive={toggleArchiveNote}
+        onToggleStar={toggleStarNote}
+        onDeleteNote={deleteNote}
+        currentNote={currentNote}
+        darkMode={darkMode}
+      />
     </div>
   );
 }
