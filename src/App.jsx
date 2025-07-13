@@ -33,6 +33,7 @@ function App() {
     stopListening,
     resetTranscript,
     changeLanguage,
+    setAutoPushCallback,
   } = useSpeechRecognition();
 
   const {

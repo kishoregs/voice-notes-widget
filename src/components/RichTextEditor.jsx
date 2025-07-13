@@ -92,8 +92,33 @@ const RichTextEditor = ({
 
   // Insert blockquote
   const insertBlockquote = useCallback(() => {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const container = range.commonAncestorContainer;
+      
+      // Check if we're already in a blockquote
+      let blockquoteElement = container.nodeType === Node.TEXT_NODE ? 
+        container.parentElement : container;
+      
+      while (blockquoteElement && blockquoteElement !== editorRef.current) {
+        if (blockquoteElement.tagName === 'BLOCKQUOTE') {
+          // We're in a blockquote, remove it by unwrapping
+          const parent = blockquoteElement.parentNode;
+          while (blockquoteElement.firstChild) {
+            parent.insertBefore(blockquoteElement.firstChild, blockquoteElement);
+          }
+          parent.removeChild(blockquoteElement);
+          handleInput();
+          return;
+        }
+        blockquoteElement = blockquoteElement.parentElement;
+      }
+    }
+    
+    // Not in a blockquote, create one
     execCommand('formatBlock', 'blockquote');
-  }, [execCommand]);
+  }, [execCommand, handleInput]);
 
   // Insert link
   const insertLink = useCallback(() => {

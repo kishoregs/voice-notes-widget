@@ -16,6 +16,45 @@ export const useSpeechRecognition = () => {
   
   const recognitionRef = useRef(null);
   const finalTranscriptRef = useRef('');
+  const interimLengthRef = useRef(0);
+  const lastPushTimeRef = useRef(Date.now());
+  const autoPushCallbackRef = useRef(null);
+
+  // Set auto-push callback
+  const setAutoPushCallback = useCallback((callback) => {
+    autoPushCallbackRef.current = callback;
+  }, []);
+
+  // Auto-push logic for long interim transcripts
+  const checkAndPushInterim = useCallback(() => {
+    const currentTime = Date.now();
+    const timeSinceLastPush = currentTime - lastPushTimeRef.current;
+    
+    // Push if interim transcript is long (>200 chars) or if it's been 10 seconds since last push
+    if (interimTranscript && 
+        ((interimTranscript.length > 200) || 
+         (interimTranscript.length > 50 && timeSinceLastPush > 10000))) {
+      
+      if (autoPushCallbackRef.current) {
+        autoPushCallbackRef.current(interimTranscript);
+        lastPushTimeRef.current = currentTime;
+        
+        // Clear interim transcript after pushing
+        setInterimTranscript('');
+        
+        // Add to final transcript
+        finalTranscriptRef.current += interimTranscript + ' ';
+        setTranscript(finalTranscriptRef.current.trim());
+      }
+    }
+  }, [interimTranscript]);
+
+  // Check for auto-push when interim transcript changes
+  useEffect(() => {
+    if (isListening && interimTranscript) {
+      checkAndPushInterim();
+    }
+  }, [interimTranscript, isListening, checkAndPushInterim]);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -164,6 +203,7 @@ export const useSpeechRecognition = () => {
     stopListening,
     resetTranscript,
     changeLanguage,
+    setAutoPushCallback,
     // Combined transcript for display
     fullTranscript: transcript + interimTranscript
   };
