@@ -95,11 +95,25 @@ function App() {
     return () => clearInterval(interval);
   }, [isRecording, recordingStartTime]);
 
+  // Set up auto-push callback for seamless note updates
+  useEffect(() => {
+    if (setAutoPushCallback) {
+      setAutoPushCallback((text) => {
+        if (currentNote && text.trim()) {
+          appendToNote(currentNote.id, text.trim() + ' ');
+        }
+      });
+    }
+  }, [setAutoPushCallback, currentNote, appendToNote]);
+
   // Append the latest final transcript segment to the current note
   useEffect(() => {
     if (latestFinalSegment && latestFinalSegment !== lastProcessedSegment && currentNote) {
-      appendToNote(currentNote.id, latestFinalSegment);
-      setLastProcessedSegment(latestFinalSegment);
+      // This is now handled by auto-push callback, but keep as fallback
+      if (!lastProcessedSegment || !latestFinalSegment.includes(lastProcessedSegment)) {
+        appendToNote(currentNote.id, latestFinalSegment);
+        setLastProcessedSegment(latestFinalSegment);
+      }
     }
   }, [latestFinalSegment, currentNote, appendToNote, lastProcessedSegment]);
 
