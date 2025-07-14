@@ -109,7 +109,8 @@ export const RecordingControls = ({
     { code: 'pt-BR', name: 'Portuguese' },
     { code: 'ja-JP', name: 'Japanese' },
     { code: 'ko-KR', name: 'Korean' },
-    { code: 'zh-CN', name: 'Chinese' }
+    { code: 'zh-CN', name: 'Chinese' },
+    { code: 'kn-IN', name: 'Kannada' }
   ];
 
   return (

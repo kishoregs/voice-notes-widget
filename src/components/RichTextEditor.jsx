@@ -24,7 +24,8 @@ const RichTextEditor = ({
   onChange, 
   placeholder = 'Start typing...', 
   className = '',
-  autoFocus = false 
+  autoFocus = false,
+  isAppending = false
 }) => {
   const editorRef = useRef(null);
   const [isEditorFocused, setIsEditorFocused] = useState(false);
@@ -34,12 +35,21 @@ const RichTextEditor = ({
     underline: false
   });
 
-  // Initialize editor content
+  // Initialize editor content, with logic to prevent flickering on append
   useEffect(() => {
-    if (editorRef.current && content !== editorRef.current.innerHTML) {
-      editorRef.current.innerHTML = content || '';
+    if (!editorRef.current) return;
+
+    const currentContent = editorRef.current.innerHTML;
+    const newContent = content || '';
+
+    if (isAppending && newContent.startsWith(currentContent)) {
+      const diff = newContent.substring(currentContent.length);
+      editorRef.current.focus();
+      document.execCommand('insertHTML', false, diff);
+    } else if (newContent !== currentContent) {
+      editorRef.current.innerHTML = newContent;
     }
-  }, [content]);
+  }, [content, isAppending]);
 
   // Auto focus if needed
   useEffect(() => {
@@ -92,33 +102,13 @@ const RichTextEditor = ({
 
   // Insert blockquote
   const insertBlockquote = useCallback(() => {
-    const selection = window.getSelection();
-    if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const container = range.commonAncestorContainer;
-      
-      // Check if we're already in a blockquote
-      let blockquoteElement = container.nodeType === Node.TEXT_NODE ? 
-        container.parentElement : container;
-      
-      while (blockquoteElement && blockquoteElement !== editorRef.current) {
-        if (blockquoteElement.tagName === 'BLOCKQUOTE') {
-          // We're in a blockquote, remove it by unwrapping
-          const parent = blockquoteElement.parentNode;
-          while (blockquoteElement.firstChild) {
-            parent.insertBefore(blockquoteElement.firstChild, blockquoteElement);
-          }
-          parent.removeChild(blockquoteElement);
-          handleInput();
-          return;
-        }
-        blockquoteElement = blockquoteElement.parentElement;
-      }
+    const currentBlock = document.queryCommandValue('formatBlock');
+    if (currentBlock.toLowerCase() === 'blockquote') {
+      execCommand('formatBlock', 'p'); // Or another default block element
+    } else {
+      execCommand('formatBlock', 'blockquote');
     }
-    
-    // Not in a blockquote, create one
-    execCommand('formatBlock', 'blockquote');
-  }, [execCommand, handleInput]);
+  }, [execCommand]);
 
   // Insert link
   const insertLink = useCallback(() => {

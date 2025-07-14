@@ -74,6 +74,16 @@ function App() {
 
   const [lastProcessedSegment, setLastProcessedSegment] = useState('');
 
+  // Auto-push interim transcript to the current note
+  useEffect(() => {
+    const pushCallback = (interimText) => {
+      if (currentNote && interimText) {
+        appendToNote(currentNote.id, interimText + ' ');
+      }
+    };
+    setAutoPushCallback(() => pushCallback);
+  }, [currentNote, appendToNote, setAutoPushCallback]);
+
   // Update elapsed time during recording
   useEffect(() => {
     let interval;
@@ -362,6 +372,7 @@ function App() {
                         onChange={(content) => updateNote(currentNote.id, { content })}
                         placeholder="Your transcription will appear here as you speak..."
                         className="min-h-[300px]"
+                        isAppending={isRecording}
                       />
                       
                       {interimTranscript && (
@@ -459,4 +470,3 @@ function App() {
 }
 
 export default App;
-

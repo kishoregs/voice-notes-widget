@@ -29,22 +29,20 @@ export const useSpeechRecognition = () => {
   const checkAndPushInterim = useCallback(() => {
     const currentTime = Date.now();
     const timeSinceLastPush = currentTime - lastPushTimeRef.current;
-    
-    // Push if interim transcript is long (>200 chars) or if it's been 10 seconds since last push
+
+    // Push if interim transcript is long (>150 chars) or if it's been 8 seconds since last push
     if (interimTranscript && 
-        ((interimTranscript.length > 200) || 
-         (interimTranscript.length > 50 && timeSinceLastPush > 10000))) {
+        ((interimTranscript.length > 150) || 
+         (interimTranscript.length > 40 && timeSinceLastPush > 8000))) {
       
       if (autoPushCallbackRef.current) {
         autoPushCallbackRef.current(interimTranscript);
         lastPushTimeRef.current = currentTime;
         
-        // Clear interim transcript after pushing
-        setInterimTranscript('');
-        
-        // Add to final transcript
+        // Add to final transcript and clear interim
         finalTranscriptRef.current += interimTranscript + ' ';
         setTranscript(finalTranscriptRef.current.trim());
+        setInterimTranscript('');
       }
     }
   }, [interimTranscript]);
