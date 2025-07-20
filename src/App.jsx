@@ -23,17 +23,13 @@ import './App.css';
 function App() {
   const {
     isListening,
+    transcript,
     interimTranscript,
-    latestFinalSegment,
     error,
     isSupported,
-    confidence,
-    language,
     startListening,
     stopListening,
     resetTranscript,
-    changeLanguage,
-    setAutoPushCallback,
   } = useSpeechRecognition();
 
   const {
@@ -72,18 +68,6 @@ function App() {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
-  const [lastProcessedSegment, setLastProcessedSegment] = useState('');
-
-  // Auto-push interim transcript to the current note
-  useEffect(() => {
-    const pushCallback = (interimText) => {
-      if (currentNote && interimText) {
-        appendToNote(currentNote.id, interimText + ' ');
-      }
-    };
-    setAutoPushCallback(() => pushCallback);
-  }, [currentNote, appendToNote, setAutoPushCallback]);
-
   // Update elapsed time during recording
   useEffect(() => {
     let interval;
@@ -95,13 +79,16 @@ function App() {
     return () => clearInterval(interval);
   }, [isRecording, recordingStartTime]);
 
+  // Track processed transcripts to prevent duplication
+  const [processedTranscripts, setProcessedTranscripts] = useState(new Set());
+  
   // Append the latest final transcript segment to the current note
   useEffect(() => {
-    if (latestFinalSegment && latestFinalSegment !== lastProcessedSegment && currentNote) {
-      appendToNote(currentNote.id, latestFinalSegment);
-      setLastProcessedSegment(latestFinalSegment);
+    if (transcript && currentNote && !processedTranscripts.has(transcript)) {
+      appendToNote(currentNote.id, transcript);
+      setProcessedTranscripts(prev => new Set([...prev, transcript]));
     }
-  }, [latestFinalSegment, currentNote, appendToNote, lastProcessedSegment]);
+  }, [transcript, currentNote, appendToNote, processedTranscripts]);
 
   // Apply dark mode and store preference
   useEffect(() => {
@@ -160,6 +147,7 @@ function App() {
     setRecordingStartTime(Date.now());
     setElapsedTime(0);
     resetTranscript();
+    setProcessedTranscripts(new Set()); // Clear processed transcripts for new recording
     startListening();
     
     if (currentNote) {
@@ -337,12 +325,9 @@ function App() {
                     onResumeRecording={handleResumeRecording}
                     onReset={handleReset}
                     elapsedTime={elapsedTime}
-                    confidence={confidence}
                     error={error}
                     audioEnabled={audioEnabled}
                     onToggleAudio={() => setAudioEnabled(!audioEnabled)}
-                    language={language}
-                    onLanguageChange={changeLanguage}
                   />
                 </CardContent>
               </Card>

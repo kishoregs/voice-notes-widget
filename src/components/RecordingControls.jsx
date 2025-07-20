@@ -9,7 +9,6 @@ import {
   RotateCcw,
   Volume2,
   VolumeX,
-  Settings,
   Clock
 } from 'lucide-react';
 import { WaveformVisualizer } from './WaveformVisualizer';
@@ -23,12 +22,9 @@ export const RecordingControls = ({
   onResumeRecording,
   onReset,
   elapsedTime,
-  confidence,
   error,
   audioEnabled = true,
   onToggleAudio,
-  language = 'en-US',
-  onLanguageChange
 }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [audioStream, setAudioStream] = useState(null);
@@ -99,20 +95,6 @@ export const RecordingControls = ({
     return "Recording...";
   };
 
-  const languages = [
-    { code: 'en-US', name: 'English (US)' },
-    { code: 'en-GB', name: 'English (UK)' },
-    { code: 'es-ES', name: 'Spanish' },
-    { code: 'fr-FR', name: 'French' },
-    { code: 'de-DE', name: 'German' },
-    { code: 'it-IT', name: 'Italian' },
-    { code: 'pt-BR', name: 'Portuguese' },
-    { code: 'ja-JP', name: 'Japanese' },
-    { code: 'ko-KR', name: 'Korean' },
-    { code: 'zh-CN', name: 'Chinese' },
-    { code: 'kn-IN', name: 'Kannada' }
-  ];
-
   return (
     <div className="space-y-6">
       {/* Status Header */}
@@ -138,11 +120,6 @@ export const RecordingControls = ({
             <Badge variant="destructive" className="animate-pulse">
               <Clock className="w-3 h-3 mr-1" />
               {formatTime(elapsedTime)}
-            </Badge>
-          )}
-          {confidence > 0 && (
-            <Badge variant="outline">
-              {Math.round(confidence * 100)}% confidence
             </Badge>
           )}
         </div>
@@ -212,20 +189,6 @@ export const RecordingControls = ({
             Audio {audioEnabled ? 'On' : 'Off'}
           </span>
         </Button>
-
-        {/* Language Selector */}
-        <select
-          value={language}
-          onChange={(e) => onLanguageChange(e.target.value)}
-          className="px-3 py-1 text-sm border rounded-md bg-background"
-          disabled={isRecording}
-        >
-          {languages.map((lang) => (
-            <option key={lang.code} value={lang.code}>
-              {lang.name}
-            </option>
-          ))}
-        </select>
       </div>
 
       {/* Error Display */}
@@ -259,4 +222,3 @@ export const RecordingControls = ({
     </div>
   );
 };
-

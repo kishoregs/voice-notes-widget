@@ -1,209 +1,152 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-// Check for browser support
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const SpeechGrammarList = window.SpeechGrammarList || window.webkitSpeechGrammarList;
-
 export const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
-  const [latestFinalSegment, setLatestFinalSegment] = useState('');
   const [error, setError] = useState(null);
-  const [isSupported, setIsSupported] = useState(false);
-  const [confidence, setConfidence] = useState(0);
-  const [language, setLanguage] = useState('en-US');
-  
-  const recognitionRef = useRef(null);
-  const finalTranscriptRef = useRef('');
-  const interimLengthRef = useRef(0);
-  const lastPushTimeRef = useRef(Date.now());
-  const autoPushCallbackRef = useRef(null);
+  const [isSupported, setIsSupported] = useState(true);
 
-  // Set auto-push callback
-  const setAutoPushCallback = useCallback((callback) => {
-    autoPushCallbackRef.current = callback;
-  }, []);
+  const socketRef = useRef(null);
+  const micStreamRef = useRef(null);
 
-  // Auto-push logic for long interim transcripts
-  const checkAndPushInterim = useCallback(() => {
-    const currentTime = Date.now();
-    const timeSinceLastPush = currentTime - lastPushTimeRef.current;
-
-    // Push if interim transcript is long (>150 chars) or if it's been 8 seconds since last push
-    if (interimTranscript && 
-        ((interimTranscript.length > 150) || 
-         (interimTranscript.length > 40 && timeSinceLastPush > 8000))) {
-      
-      if (autoPushCallbackRef.current) {
-        autoPushCallbackRef.current(interimTranscript);
-        lastPushTimeRef.current = currentTime;
-        
-        // Add to final transcript and clear interim
-        finalTranscriptRef.current += interimTranscript + ' ';
-        setTranscript(finalTranscriptRef.current.trim());
-        setInterimTranscript('');
+  const getToken = async () => {
+    try {
+      const response = await fetch('/api/assemblyai', { method: 'POST' });
+      const data = await response.json();
+      if (response.status !== 200) {
+        throw new Error(data.error || 'Failed to fetch AssemblyAI token');
       }
+      return data.token;
+    } catch (err) {
+      console.error('Error fetching AssemblyAI token:', err);
+      setError('Failed to connect to speech service.');
+      return null;
     }
-  }, [interimTranscript]);
+  };
 
-  // Check for auto-push when interim transcript changes
-  useEffect(() => {
-    if (isListening && interimTranscript) {
-      checkAndPushInterim();
-    }
-  }, [interimTranscript, isListening, checkAndPushInterim]);
+  const startListening = useCallback(async () => {
+    if (isListening) return;
 
-  // Initialize speech recognition
-  useEffect(() => {
-    if (SpeechRecognition) {
-      setIsSupported(true);
-      
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = language;
-      recognition.maxAlternatives = 1;
-      
-      // Handle results
-      recognition.onresult = (event) => {
-        let newInterimTranscript = '';
-        let finalSegment = '';
+    setError(null);
+    const token = await getToken();
+    if (!token) return;
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i];
-          const transcriptPart = result[0].transcript;
+    try {
+      socketRef.current = new WebSocket(`wss://streaming.assemblyai.com/v3/ws?token=${token}&sample_rate=44100&encoding=pcm_s16le`);
 
-          if (result.isFinal) {
-            finalSegment += transcriptPart + ' ';
-            setConfidence(result[0].confidence);
-          } else {
-            newInterimTranscript += transcriptPart;
+      socketRef.current.onopen = () => {
+        console.log('WebSocket connected to AssemblyAI');
+        setIsListening(true);
+      };
+
+      socketRef.current.onclose = () => {
+        setIsListening(false);
+      };
+
+      socketRef.current.onmessage = (message) => {
+        console.log('WebSocket message received:', message.data);
+        const data = JSON.parse(message.data);
+        console.log('Parsed data:', data);
+        
+        if (data.type === 'Turn') {
+          if (data.end_of_turn && data.transcript) {
+            console.log('Final transcript:', data.transcript);
+            setTranscript(data.transcript);
+            setInterimTranscript('');
+          } else if (!data.end_of_turn && data.transcript) {
+            console.log('Partial transcript:', data.transcript);
+            setInterimTranscript(data.transcript);
           }
         }
+      };
 
-        if (finalSegment) {
-          setLatestFinalSegment(finalSegment.trim());
-          // Update the full transcript by appending the new final segment
-          finalTranscriptRef.current += finalSegment;
-          setTranscript(finalTranscriptRef.current.trim());
+      socketRef.current.onerror = (event) => {
+        console.error('WebSocket error:', event);
+        setError('Transcription error.');
+        setIsListening(false);
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Create Web Audio API context and processor
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      
+      processor.onaudioprocess = (event) => {
+        const inputBuffer = event.inputBuffer;
+        const inputData = inputBuffer.getChannelData(0);
+        
+        // Convert Float32Array to PCM16 (16-bit signed integers)
+        const pcm16Buffer = new ArrayBuffer(inputData.length * 2);
+        const pcm16View = new Int16Array(pcm16Buffer);
+        
+        for (let i = 0; i < inputData.length; i++) {
+          // Convert from [-1, 1] float to [-32768, 32767] int16
+          const sample = Math.max(-1, Math.min(1, inputData[i]));
+          pcm16View[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
         }
         
-        setInterimTranscript(newInterimTranscript);
-      };
-
-      // Handle errors
-      recognition.onerror = (event) => {
-        console.error("Speech recognition error:", event.error, event);
-        setError(event.error);
-
-        // Auto-restart on certain errors
-        if (event.error === "no-speech" || event.error === "audio-capture" || event.error === "not-allowed") {
-          console.warn("Attempting to restart speech recognition due to error:", event.error);
-          setTimeout(() => {
-            if (isListening) {
-              startListening();
-            }
-          }, 1000);
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          socketRef.current.send(pcm16Buffer);
+        } else {
+          console.log('WebSocket not ready, state:', socketRef.current?.readyState);
         }
       };
       
-      // Handle end event
-      recognition.onend = () => {
-        if (isListening) {
-          // Auto-restart if we're supposed to be listening
-          setTimeout(() => {
-            if (isListening) {
-              recognition.start();
-            }
-          }, 100);
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+      
+      // Store references for cleanup
+      micStreamRef.current = {
+        stream,
+        audioContext,
+        source,
+        processor,
+        stop: () => {
+          processor.disconnect();
+          source.disconnect();
+          audioContext.close();
+          stream.getTracks().forEach(track => track.stop());
         }
       };
-      
-      // Handle start event
-      recognition.onstart = () => {
-        setError(null);
-      };
-      
-      recognitionRef.current = recognition;
-    } else {
-      setIsSupported(false);
-      setError('Speech recognition not supported in this browser');
-    }
-    
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
-    };
-  }, [language]);
 
-  const startListening = useCallback(() => {
-    if (!isSupported) {
-      setError('Speech recognition not supported');
-      return;
-    }
-    
-    if (recognitionRef.current && !isListening) {
-      try {
-        setIsListening(true);
-        setError(null);
-        recognitionRef.current.start();
-      } catch (err) {
-        console.error('Error starting recognition:', err);
-        setError('Failed to start speech recognition');
-        setIsListening(false);
-      }
-    }
-  }, [isSupported, isListening]);
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current && isListening) {
+    } catch (err) {
+      console.error('Error starting transcription:', err);
+      setError('Failed to start transcription.');
       setIsListening(false);
-      recognitionRef.current.stop();
     }
+  }, [isListening]);
+
+  const stopListening = useCallback(async () => {
+    if (!isListening || !socketRef.current) return;
+
+    if (micStreamRef.current) {
+      micStreamRef.current.stop();
+      micStreamRef.current = null;
+    }
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
+    setIsListening(false);
   }, [isListening]);
 
   const resetTranscript = useCallback(() => {
     setTranscript('');
     setInterimTranscript('');
-    setLatestFinalSegment('');
-    finalTranscriptRef.current = '';
-    setConfidence(0);
   }, []);
-
-  const changeLanguage = useCallback((newLanguage) => {
-    const wasListening = isListening;
-    if (wasListening) {
-      stopListening();
-    }
-    
-    setLanguage(newLanguage);
-    
-    // Restart if we were listening
-    if (wasListening) {
-      setTimeout(() => {
-        startListening();
-      }, 100);
-    }
-  }, [isListening, stopListening, startListening]);
 
   return {
     isListening,
     transcript,
     interimTranscript,
-    latestFinalSegment,
     error,
     isSupported,
-    confidence,
-    language,
     startListening,
     stopListening,
     resetTranscript,
-    changeLanguage,
-    setAutoPushCallback,
-    // Combined transcript for display
-    fullTranscript: transcript + interimTranscript
+    fullTranscript: transcript + interimTranscript,
   };
 };
-
